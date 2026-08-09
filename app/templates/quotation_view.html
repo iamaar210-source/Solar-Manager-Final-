@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ q.quote_no }}{% endblock %}
+{% block page_title %}Quotation {{ q.quote_no }}{% endblock %}
+{% block page_sub %}{{ loc_info.name }}{% endblock %}
+{% block content %}
+<div class="flex gap-3 mb-4">
+  <a href="{{ url_for('main.quotation_print', qid=q.id) }}" target="_blank" class="btn-yellow px-4 py-2 rounded-lg text-sm font-semibold">🖨 Print</a>
+  <a href="{{ url_for('main.quotations') }}" class="bg-gray-700 px-4 py-2 rounded-lg text-sm">← Back</a>
+</div>
+<div class="card rounded-xl p-6 max-w-3xl">
+  <div class="flex justify-between mb-4">
+    <div><div class="text-xl font-bold neon">{{ loc_info.name }}</div>
+      <div class="text-sm text-gray-400">{{ loc_info.addr1 }}</div></div>
+    <div class="text-right"><div class="font-bold">{{ q.quote_no }}</div><div class="text-sm text-gray-400">{{ q.date }}</div></div>
+  </div>
+  <div class="mb-3 text-sm"><strong>{{ q.customer_name }}</strong><br>{{ q.customer_phone or '' }}<br>{{ q.customer_address or '' }}</div>
+  <table class="mb-4">
+    <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+    <tbody>{% for it in q.items %}<tr><td>{{ it.item_name }}</td><td>{{ it.quantity }}</td><td>Rs {{ "{:,.0f}".format(it.unit_price) }}</td><td>Rs {{ "{:,.0f}".format(it.line_total) }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <div class="text-right"><div class="text-lg font-bold neon">Total: Rs {{ "{:,.0f}".format(q.total or 0) }}</div></div>
+  {% if q.notes %}<p class="text-sm text-gray-400 mt-3">{{ q.notes }}</p>{% endif %}
+</div>
+{% endblock %}

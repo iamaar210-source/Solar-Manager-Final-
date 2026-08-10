@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Profit{% endblock %}
+{% block page_title %}Profit (Owner Only){% endblock %}
+{% block page_sub %}{{ loc_info.name }}{% endblock %}
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  <div class="card rounded-xl p-5"><div class="text-sm text-gray-400">Month Revenue</div><div class="text-2xl font-bold text-green-400">Rs {{ "{:,.0f}".format(sales) }}</div></div>
+  <div class="card rounded-xl p-5"><div class="text-sm text-gray-400">Month Expenses</div><div class="text-2xl font-bold text-red-400">Rs {{ "{:,.0f}".format(expenses) }}</div></div>
+  <div class="card rounded-xl p-5"><div class="text-sm text-gray-400">Net (Revenue − Expenses)</div><div class="text-2xl font-bold neon">Rs {{ "{:,.0f}".format(net) }}</div></div>
+</div>
+<div class="card rounded-xl p-5">
+  <p class="text-sm text-gray-400">This section is locked for Employee accounts (same as your desktop Profit lock).</p>
+  <p class="text-xs text-gray-500 mt-2">Full COGS-based gross profit can be expanded later using purchase prices from inventory.</p>
+</div>
+{% endblock %}

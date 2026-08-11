@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Vendors{% endblock %}
+{% block page_title %}Vendors & Orders{% endblock %}
+{% block page_sub %}{{ loc_info.name }}{% endblock %}
+{% block content %}
+<div class="flex justify-end gap-2 mb-3"><a href="{{ url_for('main.vendors_excel') }}" class="bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg text-sm font-semibold">📊 Excel</a></div>
+<div class="flex gap-3 mb-4">
+  <button onclick="document.getElementById('v-form').classList.toggle('hidden')" class="btn-yellow px-4 py-2 rounded-lg text-sm font-semibold">+ Vendor</button>
+  <button onclick="document.getElementById('o-form').classList.toggle('hidden')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ Order</button>
+</div>
+<div id="v-form" class="card rounded-xl p-5 mb-4 hidden">
+  <form method="POST" action="{{ url_for('main.vendors_add') }}" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <input name="name" class="input" placeholder="Vendor name *" required>
+    <input name="phone" class="input" placeholder="Phone">
+    <input name="address" class="input" placeholder="Address">
+    <button type="submit" class="btn-yellow px-4 py-2 rounded-lg text-sm font-semibold">Save Vendor</button>
+  </form>
+</div>
+<div id="o-form" class="card rounded-xl p-5 mb-4 hidden">
+  <form method="POST" action="{{ url_for('main.vendors_order') }}" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <input name="vendor_name" class="input" placeholder="Vendor name *" required list="vlist">
+    <datalist id="vlist">{% for v in vendors %}<option value="{{ v.name }}">{% endfor %}</datalist>
+    <input name="item_name" class="input" placeholder="Item (from stock)" list="slist" required>
+    <datalist id="slist">{% for s in stock %}<option value="{{ s.item_name }}">{% endfor %}</datalist>
+    <input name="quantity" type="number" step="any" class="input" placeholder="Qty" required>
+    <input name="unit_price" type="number" step="any" class="input" placeholder="Unit price">
+    <input name="unit" class="input" value="pcs" placeholder="Unit">
+    <button type="submit" class="btn-yellow px-4 py-2 rounded-lg text-sm font-semibold">Place Order</button>
+  </form>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="card rounded-xl overflow-hidden">
+    <div class="p-3 border-b border-gray-800 font-semibold neon text-sm">Vendors</div>
+    <table>
+      <thead><tr><th>Name</th><th>Phone</th><th></th></tr></thead>
+      <tbody>
+        {% for v in vendors %}
+        <tr><td>{{ v.name }}</td><td>{{ v.phone or '—' }}</td>
+          <td>{% if can_edit %}<form method="POST" action="{{ url_for('main.vendors_delete', vid=v.id) }}" class="inline" onsubmit="return confirm('Delete?')"><button class="text-xs text-red-400">Del</button></form>{% endif %}</td></tr>
+        {% else %}<tr><td colspan="3" class="text-center text-gray-500 py-4">No vendors</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card rounded-xl overflow-hidden">
+    <div class="p-3 border-b border-gray-800 font-semibold neon text-sm">Orders</div>
+    <table>
+      <thead><tr><th>Vendor</th><th>Item</th><th>Qty</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for o in orders %}
+        <tr>
+          <td>{{ o.vendor_name }}</td><td>{{ o.item_name }}</td><td>{{ o.quantity }}</td>
+          <td><span class="{% if o.status=='Received' %}text-green-400{% else %}text-yellow-400{% endif %} text-xs font-semibold">{{ o.status }}</span></td>
+          <td></td>
+        </tr>
+        {% else %}<tr><td colspan="5" class="text-center text-gray-500 py-4">No orders</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

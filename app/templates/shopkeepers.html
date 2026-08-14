@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Shopkeepers{% endblock %}
+{% block page_title %}Shopkeepers & Ledger{% endblock %}
+{% block page_sub %}{{ loc_info.name }}{% endblock %}
+{% block content %}
+<div class="flex justify-end gap-2 mb-3"><a href="{{ url_for('main.shopkeepers_excel') }}" class="bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg text-sm font-semibold">📊 Excel</a></div>
+<div class="flex gap-3 mb-4">
+  <button onclick="document.getElementById('s-form').classList.toggle('hidden')" class="btn-yellow px-4 py-2 rounded-lg text-sm font-semibold">+ Shopkeeper</button>
+  <button onclick="document.getElementById('l-form').classList.toggle('hidden')" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">+ Ledger Entry</button>
+</div>
+<div id="s-form" class="card rounded-xl p-5 mb-4 hidden">
+  <form method="POST" action="{{ url_for('main.shopkeepers_add') }}" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <input name="name" class="input" placeholder="Name *" required>
+    <input name="phone" class="input" placeholder="Phone">
+    <input name="address" class="input" placeholder="Address">
+    <button type="submit" class="btn-yellow px-4 py-2 rounded-lg text-sm font-semibold">Save</button>
+  </form>
+</div>
+<div id="l-form" class="card rounded-xl p-5 mb-4 hidden">
+  <form method="POST" action="{{ url_for('main.shopkeepers_ledger') }}" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <input name="customer_name" class="input" placeholder="Shopkeeper / Name *" required>
+    <input name="date" type="date" class="input">
+    <input name="description" class="input" placeholder="Description">
+    <input name="item_name" class="input" placeholder="Item (from stock)" list="stock-list-ledger">
+    <input name="quantity" type="number" step="any" class="input" placeholder="Qty to issue (reduces stock)">
+    <input name="debit" type="number" step="any" class="input" placeholder="Debit">
+    <input name="credit" type="number" step="any" class="input" placeholder="Credit">
+    <button type="submit" class="btn-yellow px-4 py-2 rounded-lg text-sm font-semibold">Add Entry</button>
+  </form>
+  <p class="text-xs text-gray-500 mt-2">If you enter Item + Qty, shared stock quantity is reduced automatically.</p>
+  <datalist id="stock-list-ledger">{% for s in stock|default([]) %}<option value="{{ s.item_name }}">{% endfor %}</datalist>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="card rounded-xl overflow-hidden">
+    <div class="p-3 border-b border-gray-800 font-semibold neon text-sm">Shopkeepers</div>
+    <table>
+      <thead><tr><th>Name</th><th>Phone</th><th></th></tr></thead>
+      <tbody>
+        {% for s in shopkeepers %}
+        <tr><td>{{ s.name }}</td><td>{{ s.phone or '—' }}</td>
+          <td>{% if can_edit %}<form method="POST" action="{{ url_for('main.shopkeepers_delete', sid=s.id) }}" class="inline" onsubmit="return confirm('Delete?')"><button class="text-xs text-red-400">Del</button></form>{% endif %}</td></tr>
+        {% else %}<tr><td colspan="3" class="text-center text-gray-500 py-4">None</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card rounded-xl overflow-hidden">
+    <div class="p-3 border-b border-gray-800 font-semibold neon text-sm">Ledger</div>
+    <table>
+      <thead><tr><th>Name</th><th>Date</th><th>Debit</th><th>Credit</th></tr></thead>
+      <tbody>
+        {% for l in ledger %}
+        <tr><td>{{ l.customer_name }}</td><td>{{ l.date }}</td>
+          <td class="text-red-400">{{ "{:,.0f}".format(l.debit or 0) }}</td>
+          <td class="text-green-400">{{ "{:,.0f}".format(l.credit or 0) }}</td></tr>
+        {% else %}<tr><td colspan="4" class="text-center text-gray-500 py-4">No entries</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

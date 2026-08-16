@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Quotations{% endblock %}
+{% block page_title %}Quotations{% endblock %}
+{% block page_sub %}{{ loc_info.name }} · Valid for 3 days{% endblock %}
+{% block content %}
+<div class="flex justify-end gap-2 mb-3">
+  <a href="{{ url_for('main.quotations_excel') }}" class="bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg text-sm font-semibold">📊 Excel</a>
+</div>
+<div class="flex justify-between mb-4 flex-wrap gap-2">
+  <form class="flex gap-2"><input name="q" value="{{ search }}" class="input w-56" placeholder="Search..."><button class="btn-yellow px-3 py-2 rounded-lg text-sm">Search</button></form>
+  <button onclick="document.getElementById('add-form').classList.toggle('hidden')" class="btn-yellow px-4 py-2 rounded-lg text-sm font-semibold">+ New Quotation</button>
+</div>
+
+<div id="add-form" class="card rounded-xl p-5 mb-4 hidden">
+  <form method="POST" action="{{ url_for('main.quotations_add') }}">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+      <input name="customer_name" class="input" placeholder="Customer name *" required>
+      <input name="customer_phone" class="input" placeholder="Phone">
+      <input name="customer_address" class="input" placeholder="Address">
+      <input name="date" type="date" class="input">
+      <input name="discount" type="number" step="any" class="input" placeholder="Discount">
+    </div>
+    <p class="text-xs text-gray-400 mb-2">
+      Use stock items (sale price auto-fills) <strong>or</strong> type a new item and enter purchase + sale price.
+      Check “Add to stock” to save new items into inventory.
+    </p>
+    <div id="q-items">
+      <div class="grid grid-cols-12 gap-2 mb-2 item-row items-center">
+        <input name="item_name[]" class="input col-span-2" placeholder="Item name *" list="stock-list" required onchange="fillPrice(this)" oninput="fillPrice(this)">
+        <input name="qty[]" type="number" step="any" class="input col-span-1" placeholder="Qty" value="1" required oninput="recalcQuoteLines()" onchange="recalcQuoteLines()">
+        <input name="purchase_price[]" type="number" step="any" class="input col-span-2" placeholder="Purchase (new)">
+        <input name="price[]" type="number" step="any" class="input col-span-2" placeholder="Sale price *" required oninput="recalcQuoteLines()" onchange="recalcQuoteLines()">
+        <span class="col-span-2 text-xs text-yellow-400 font-semibold line-sub">Subtotal: Rs 0</span>
+        <label class="col-span-2 text-xs text-gray-400 flex items-center gap-1">
+          <input type="checkbox" class="add-stock-cb" onchange="syncAddStockFlags()"> Add to stock
+        </label>
+        <button type="button" onclick="this.closest('.item-row').remove(); syncAddStockFlags(); recalcQuoteLines()" class="col-span-1 text-red-400 text-sm">✕</button>
+      </div>
+    </div>
+    <div id="add-stock-flags"></div>
+    <datalist id="stock-list">{% for s in stock %}<option value="{{ s.item_name }}">{% endfor %}</datalist>
+    <button type="button" onclick="addQuoteRow()" class="text-sm text-yellow-400 mb-3">+ Add Item</button>
+    <div id="quote-grand-subtotal" class="text-sm text-yellow-400 font-semibold mb-3"></div>
+    <input name="notes" class="input mb-3" placeholder="Notes">
+    <button type="submit" class="btn-yellow px-6 py-2 rounded-lg text-sm font-semibold">Save Quotation</button>
+  </form>
+</div>
+
+<div class="card rounded-xl overflow-hidden">
+  <table>
+    <thead><tr><th>Quote No</th><th>Customer</th><th>Date</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for q in quotations %}
+      <tr>
+        <td class="neon font-medium">{{ q.quote_no }}</td>
+        <td>{{ q.customer_name }}</td>
+        <td>{{ q.date }}</td>
+        <td>Rs {{ "{:,.0f}".format(q.total or 0) }}</td>
+        <td>{{ q.status }}</td>
+        <td class="space-x-2">
+          <a href="{{ url_for('main.quotation_view', qid=q.id) }}" class="text-xs bg-blue-600/30 text-blue-300 px-2 py-1 rounded hover:bg-blue-600/50">View</a>
+          <a href="{{ url_for('main.quotation_print', qid=q.id) }}" target="_blank" class="text-xs bg-green-600/30 text-green-300 px-2 py-1 rounded hover:bg-green-600/50 font-semibold">🖨 Print</a>
+          <a href="{{ url_for('main.quotation_edit', qid=q.id) }}" class="text-xs bg-yellow-600/30 text-yellow-300 px-2 py-1 rounded hover:bg-yellow-600/50">Edit</a>
+          {% if can_edit %}
+          <form method="POST" action="{{ url_for('main.quotations_delete', qid=q.id) }}" class="inline" onsubmit="return confirm('Delete?')">
+            <button class="text-xs text-red-400">Delete</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="text-center text-gray-500 py-8">No quotations yet</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+var STOCK_PRICES = {
+{% for s in stock %}
+  {{ s.item_name|tojson }}: {{ s.sale_price or 0 }},
+{% endfor %}
+};
+var STOCK_COST = {
+{% for s in stock %}
+  {{ s.item_name|tojson }}: {{ s.purchase_price or 0 }},
+{% endfor %}
+};
+function recalcQuoteLines(){
+  var rows = document.querySelectorAll('#q-items .item-row');
+  var grand = 0;
+  rows.forEach(function(row){
+    var q = parseFloat((row.querySelector('input[name="qty[]"]')||{}).value) || 0;
+    var p = parseFloat((row.querySelector('input[name="price[]"]')||{}).value) || 0;
+    var sub = q * p;
+    grand += sub;
+    var el = row.querySelector('.line-sub');
+    if(el) el.textContent = 'Subtotal: Rs ' + Math.round(sub).toLocaleString();
+  });
+  var g = document.getElementById('quote-grand-subtotal');
+  if(g) g.textContent = rows.length ? ('Items subtotal: Rs ' + Math.round(grand).toLocaleString()) : '';
+}
+function fillPrice(inp){
+  var row = inp.closest('.item-row');
+  if(!row) return;
+  var price = row.querySelector('input[name="price[]"]');
+  if(price && STOCK_PRICES[inp.value] != null) price.value = STOCK_PRICES[inp.value];
+  checkQuotePrice(row);
+}
+function checkQuotePrice(row){
+  if(!row) return;
+  var nameInp = row.querySelector('input[name="item_name[]"]');
+  var priceInp = row.querySelector('input[name="price[]"]');
+  var purInp = row.querySelector('input[name="purchase_price[]"]');
+  if(!nameInp || !priceInp) return;
+  var sale = parseFloat(priceInp.value) || 0;
+  var cost = STOCK_COST[nameInp.value] || 0;
+  if(purInp && parseFloat(purInp.value) > 0) cost = parseFloat(purInp.value);
+  if(cost > 0 && sale > 0 && sale < cost){
+    priceInp.classList.add('border-red-500');
+  } else {
+    priceInp.classList.remove('border-red-500');
+  }
+}
+function syncAddStockFlags(){
+  var box = document.getElementById('add-stock-flags');
+  if(!box) return;
+  box.innerHTML = '';
+  var rows = document.querySelectorAll('#q-items .item-row');
+  rows.forEach(function(row, idx){
+    var cb = row.querySelector('.add-stock-cb');
+    if(cb && cb.checked){
+      var inp = document.createElement('input');
+      inp.type = 'hidden';
+      inp.name = 'add_to_stock_' + idx;
+      inp.value = 'yes';
+      box.appendChild(inp);
+    }
+  });
+}
+function addQuoteRow(){
+  var area = document.getElementById('q-items');
+  var div = document.createElement('div');
+  div.className = 'grid grid-cols-12 gap-2 mb-2 item-row items-center';
+  div.innerHTML =
+    '<input name="item_name[]" class="input col-span-2" placeholder="Item name *" list="stock-list" required onchange="fillPrice(this)" oninput="fillPrice(this)">' +
+    '<input name="qty[]" type="number" step="any" class="input col-span-1" placeholder="Qty" value="1" required oninput="recalcQuoteLines()" onchange="recalcQuoteLines()">' +
+    '<input name="purchase_price[]" type="number" step="any" class="input col-span-2" placeholder="Purchase (new)">' +
+    '<input name="price[]" type="number" step="any" class="input col-span-2" placeholder="Sale price *" required oninput="recalcQuoteLines()" onchange="recalcQuoteLines()">' +
+    '<span class="col-span-2 text-xs text-yellow-400 font-semibold line-sub">Subtotal: Rs 0</span>' +
+    '<label class="col-span-2 text-xs text-gray-400 flex items-center gap-1"><input type="checkbox" class="add-stock-cb" onchange="syncAddStockFlags()"> Add to stock</label>' +
+    '<button type="button" onclick="this.closest(\'.item-row\').remove(); syncAddStockFlags(); recalcQuoteLines()" class="col-span-1 text-red-400 text-sm">✕</button>';
+  area.appendChild(div);
+  recalcQuoteLines();
+}
+document.querySelector('#add-form form') && document.querySelector('#add-form form').addEventListener('submit', function(e){
+  syncAddStockFlags();
+  var rows = document.querySelectorAll('#q-items .item-row');
+  for(var i=0;i<rows.length;i++){
+    var name = rows[i].querySelector('input[name="item_name[]"]');
+    var price = rows[i].querySelector('input[name="price[]"]');
+    var pur = rows[i].querySelector('input[name="purchase_price[]"]');
+    if(!name || !price) continue;
+    var sale = parseFloat(price.value) || 0;
+    var cost = STOCK_COST[name.value] || 0;
+    if(pur && parseFloat(pur.value) > 0) cost = parseFloat(pur.value);
+    if(cost > 0 && sale < cost){
+      e.preventDefault();
+      alert('Sale price for "'+name.value+'" cannot be less than purchase price (Rs '+cost+').');
+      return false;
+    }
+  }
+});
+</script>
+
+{% endblock %}

@@ -262,8 +262,23 @@ def stock_delete(iid):
 def expenses():
     user = get_current_user()
     ctx = common_ctx(user)
-    rows = db.get_expenses(ctx["location"])
-    return render_template("expenses.html", expenses=rows, **ctx)
+    loc = ctx["location"]
+    rows = db.get_expenses(loc)
+    employees = db.get_employees(loc) or []
+    persons = db.get_expense_persons(loc) or []
+    return render_template("expenses.html", expenses=rows, employees=employees, persons=persons, person_filter=None, **ctx)
+
+@bp.route("/expenses/person/<path:person_name>")
+@login_required
+def expenses_by_person(person_name):
+    user = get_current_user()
+    ctx = common_ctx(user)
+    loc = ctx["location"]
+    rows = db.get_expenses(loc, person_name=person_name)
+    employees = db.get_employees(loc) or []
+    persons = db.get_expense_persons(loc) or []
+    return render_template("expenses.html", expenses=rows, employees=employees, persons=persons,
+                           person_filter=person_name, **ctx)
 
 @bp.route("/expenses/add", methods=["POST"])
 @login_required
@@ -275,8 +290,22 @@ def expenses_add():
     if amount <= 0:
         flash("Amount required", "error")
         return redirect(url_for("main.expenses"))
-    db.add_expense(loc, date, request.form.get("category", "General"), amount, request.form.get("description", ""))
+    person = (request.form.get("person_name") or "").strip()
+    if not person:
+        person = (request.form.get("person_custom") or "").strip()
+    received = float(request.form.get("amount_received") or 0)
+    db.add_expense(
+        loc, date,
+        request.form.get("category", "General"),
+        amount,
+        request.form.get("description", ""),
+        person_name=person,
+        amount_received=received,
+    )
     flash("Expense added", "success")
+    redirect_person = request.form.get("redirect_person")
+    if redirect_person:
+        return redirect(url_for("main.expenses_by_person", person_name=redirect_person))
     return redirect(url_for("main.expenses"))
 
 @bp.route("/expenses/delete/<int:eid>", methods=["POST"])
@@ -288,7 +317,24 @@ def expenses_delete(eid):
         return redirect(url_for("main.expenses"))
     db.delete_expense(eid, get_active_location(user))
     flash("Expense deleted", "success")
-    return redirect(url_for("main.expenses"))
+    return redirect(request.referrer or url_for("main.expenses"))
+
+@bp.route("/expenses/<int:eid>/receive", methods=["POST"])
+@login_required
+def expenses_receive(eid):
+    """Record additional payment received from boss for this expense."""
+    user = get_current_user()
+    loc = get_active_location(user)
+    extra = float(request.form.get("extra_received") or 0)
+    if extra <= 0:
+        flash("Enter amount received", "error")
+        return redirect(request.referrer or url_for("main.expenses"))
+    try:
+        new_recv, status = db.add_expense_received(eid, loc, extra)
+        flash(f"Received updated: Rs {new_recv:,.0f} ({status})", "success")
+    except Exception as e:
+        flash(str(e), "error")
+    return redirect(request.referrer or url_for("main.expenses"))
 
 # ---------- INVOICES ----------
 @bp.route("/invoices")
@@ -912,10 +958,19 @@ def expenses_excel():
     loc = get_active_location(user)
     try:
         rows = db.get_expenses(loc) or []
-        data = [[r.get("date"), r.get("category"), r.get("amount"), r.get("description")]
-                for r in rows if isinstance(r, dict)]
+        data = []
+        for r in rows:
+            if not isinstance(r, dict):
+                continue
+            amt = float(r.get("amount") or 0)
+            recv = float(r.get("amount_received") or 0)
+            data.append([
+                r.get("date"), r.get("person_name") or "", r.get("category"),
+                amt, recv, max(0, amt - recv), r.get("payment_status") or "Pending",
+                r.get("description") or "",
+            ])
         return _excel_response(f"expenses_{loc}.xlsx",
-            ["Date", "Category", "Amount", "Description"], data)
+            ["Date", "Person", "Category", "Amount", "Received", "Pending", "Status", "Description"], data)
     except Exception as e:
         flash(f"Excel error: {e}", "error")
         return redirect(url_for("main.expenses"))
@@ -1056,15 +1111,24 @@ def expense_edit(eid):
     if not e:
         flash("Not found", "error"); return redirect(url_for("main.expenses"))
     if request.method == "POST":
-        db.update_expense(eid, loc, date=request.form.get("date"), category=request.form.get("category"),
-            amount=request.form.get("amount"), description=request.form.get("description"))
+        db.update_expense(
+            eid, loc,
+            date=request.form.get("date"),
+            category=request.form.get("category"),
+            amount=request.form.get("amount"),
+            description=request.form.get("description"),
+            person_name=request.form.get("person_name"),
+            amount_received=request.form.get("amount_received"),
+        )
         flash("Expense updated", "success")
         return redirect(url_for("main.expenses"))
     return render_template("entity_edit.html", title="Edit Expense", action=url_for("main.expense_edit", eid=eid),
         fields=[
             ("date","Date",e.get("date"),"date"),
             ("category","Category",e.get("category"),"text"),
-            ("amount","Amount",e.get("amount"),"number"),
+            ("amount","Amount (spent)",e.get("amount"),"number"),
+            ("amount_received","Amount received from boss",e.get("amount_received") or 0,"number"),
+            ("person_name","Person who did expense",e.get("person_name") or "","text"),
             ("description","Description",e.get("description"),"text"),
         ], back=url_for("main.expenses"), **common_ctx(user))
 

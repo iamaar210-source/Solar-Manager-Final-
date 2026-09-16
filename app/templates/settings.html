@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Settings{% endblock %}
 {% block page_title %}Settings + Login Alerts{% endblock %}
-{% block page_sub %}SMS + Email only when someone logs in{% endblock %}
+{% block page_sub %}SMS + Email only when someone logs in · Owner only{% endblock %}
 {% block content %}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
   <div class="card rounded-xl p-5">
@@ -56,6 +56,52 @@
       <div class="bg-black/40 p-3 rounded">
         <span class="text-gray-300">SAMEERSHAHID-44</span> / UASOLARMIN — UA Kamoke
       </div>
+    </div>
+  </div>
+</div>
+
+{# ===== LOCKED: Data backup (Owner only — this whole page is already owner-only) ===== #}
+<div class="card rounded-xl p-5 mt-6 border border-yellow-500/30">
+  <div class="flex items-center justify-between mb-4">
+    <h3 class="font-semibold text-yellow-400">🔒 Data backup — Export / Import</h3>
+    <span class="text-xs bg-yellow-900/40 text-yellow-300 px-2 py-1 rounded">Owner locked</span>
+  </div>
+  <p class="text-sm text-gray-400 mb-4">
+    Download a full database backup, or restore from a previous <code class="text-yellow-400">.db</code> file.
+    Keep backups on your computer so data is never lost after a deploy.
+  </p>
+  <p class="text-xs text-gray-500 mb-4">
+    Current DB size:
+    {% if db_size %}{{ "%.1f"|format(db_size / 1024) }} KB{% else %}—{% endif %}
+  </p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    {# EXPORT #}
+    <div class="bg-black/40 rounded-lg p-4 border border-green-500/20">
+      <h4 class="text-sm font-medium text-green-400 mb-2">Export (download backup)</h4>
+      <p class="text-xs text-gray-500 mb-3">Saves all customers, invoices, quotations, expenses, stock, etc.</p>
+      <a href="{{ url_for('main.settings_export_db') }}"
+         class="inline-block bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+        ⬇ Download database (.db)
+      </a>
+    </div>
+
+    {# IMPORT #}
+    <div class="bg-black/40 rounded-lg p-4 border border-red-500/20">
+      <h4 class="text-sm font-medium text-red-400 mb-2">Import (restore backup)</h4>
+      <p class="text-xs text-gray-500 mb-3">
+        Replaces current data with the uploaded file. Requires owner password.
+        A safety copy of the current DB is kept on the server.
+      </p>
+      <form method="POST" action="{{ url_for('main.settings_import_db') }}" enctype="multipart/form-data"
+            onsubmit="return confirm('This will REPLACE all current data with the backup. Continue?');">
+        <input type="file" name="backup_file" accept=".db,.sqlite,.sqlite3" required
+               class="block w-full text-xs text-gray-400 mb-2 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:bg-gray-700 file:text-white">
+        <input type="password" name="owner_password" class="input mb-2" placeholder="Owner password *" required>
+        <button type="submit" class="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+          ⬆ Import &amp; restore
+        </button>
+      </form>
     </div>
   </div>
 </div>

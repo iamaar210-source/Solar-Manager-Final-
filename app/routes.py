@@ -1,10 +1,14 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, make_response
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, make_response, send_file
 from functools import wraps
 from datetime import datetime
+from pathlib import Path
 from app.database import Database, LOCATIONS
 from config import Config
 from app.alerts import alerts
 import io
+import os
+import shutil
+import tempfile
 
 def _excel_response(filename, headers, rows):
     """Build an Excel file download response."""
@@ -266,7 +270,11 @@ def expenses():
     rows = db.get_expenses(loc)
     employees = db.get_employees(loc) or []
     persons = db.get_expense_persons(loc) or []
-    return render_template("expenses.html", expenses=rows, employees=employees, persons=persons, person_filter=None, **ctx)
+    month_summary = db.month_expense_summary(loc)
+    return render_template(
+        "expenses.html", expenses=rows, employees=employees, persons=persons,
+        person_filter=None, month_summary=month_summary, **ctx
+    )
 
 @bp.route("/expenses/person/<path:person_name>")
 @login_required
@@ -277,8 +285,11 @@ def expenses_by_person(person_name):
     rows = db.get_expenses(loc, person_name=person_name)
     employees = db.get_employees(loc) or []
     persons = db.get_expense_persons(loc) or []
-    return render_template("expenses.html", expenses=rows, employees=employees, persons=persons,
-                           person_filter=person_name, **ctx)
+    month_summary = db.month_expense_summary(loc, person_name=person_name)
+    return render_template(
+        "expenses.html", expenses=rows, employees=employees, persons=persons,
+        person_filter=person_name, month_summary=month_summary, **ctx
+    )
 
 @bp.route("/expenses/add", methods=["POST"])
 @login_required
@@ -1310,5 +1321,91 @@ def settings():
         flash("Settings are only available to the Owner account", "error")
         return redirect(url_for("main.dashboard"))
     ctx = common_ctx(user)
-    return render_template("settings.html",
-        alert_phone=Config.ALERT_PHONE, alert_email=Config.ALERT_EMAIL, **ctx)
+    db_path = getattr(db, "db_path", None) or Config.DATABASE_PATH
+    db_size = 0
+    try:
+        if db_path and os.path.isfile(db_path):
+            db_size = os.path.getsize(db_path)
+    except Exception:
+        pass
+    return render_template(
+        "settings.html",
+        alert_phone=Config.ALERT_PHONE,
+        alert_email=Config.ALERT_EMAIL,
+        db_path=db_path,
+        db_size=db_size,
+        **ctx,
+    )
+
+@bp.route("/settings/export-db")
+@login_required
+def settings_export_db():
+    """Owner-only: download full SQLite database backup."""
+    user = get_current_user()
+    if not user or user.get("role") != "owner":
+        flash("Only Owner can export data", "error")
+        return redirect(url_for("main.dashboard"))
+    db_path = getattr(db, "db_path", None) or Config.DATABASE_PATH
+    if not db_path or not os.path.isfile(db_path):
+        flash("Database file not found", "error")
+        return redirect(url_for("main.settings"))
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"solar_manager_backup_{stamp}.db"
+    return send_file(
+        db_path,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/octet-stream",
+    )
+
+@bp.route("/settings/import-db", methods=["POST"])
+@login_required
+def settings_import_db():
+    """Owner-only: restore database from uploaded .db backup. Requires owner password."""
+    user = get_current_user()
+    if not user or user.get("role") != "owner":
+        flash("Only Owner can import data", "error")
+        return redirect(url_for("main.dashboard"))
+
+    password = (request.form.get("owner_password") or "").strip()
+    if not password:
+        flash("Enter owner password to import", "error")
+        return redirect(url_for("main.settings"))
+    auth = db.authenticate(user.get("username") or "owner", password)
+    if not auth:
+        flash("Wrong password — import cancelled", "error")
+        return redirect(url_for("main.settings"))
+
+    f = request.files.get("backup_file")
+    if not f or not f.filename:
+        flash("Choose a .db backup file", "error")
+        return redirect(url_for("main.settings"))
+    name = (f.filename or "").lower()
+    if not (name.endswith(".db") or name.endswith(".sqlite") or name.endswith(".sqlite3")):
+        flash("File must be a .db or .sqlite backup", "error")
+        return redirect(url_for("main.settings"))
+
+    db_path = getattr(db, "db_path", None) or Config.DATABASE_PATH
+    try:
+        # Save upload to temp, validate it is SQLite, then replace live DB
+        fd, tmp_path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        f.save(tmp_path)
+        with open(tmp_path, "rb") as fh:
+            header = fh.read(16)
+        if not header.startswith(b"SQLite format 3"):
+            os.remove(tmp_path)
+            flash("Invalid file — not a SQLite database", "error")
+            return redirect(url_for("main.settings"))
+
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        # Safety copy of current DB
+        if os.path.isfile(db_path):
+            safety = db_path + ".pre_import_bak"
+            shutil.copy2(db_path, safety)
+        shutil.copy2(tmp_path, db_path)
+        os.remove(tmp_path)
+        flash("Database imported successfully. Refresh pages to see restored data.", "success")
+    except Exception as e:
+        flash(f"Import failed: {e}", "error")
+    return redirect(url_for("main.settings"))

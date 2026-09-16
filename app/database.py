@@ -731,6 +731,41 @@ class Database:
         conn.close()
         return total
 
+    def month_expense_summary(self, location, year_month=None, person_name=None):
+        """Monthly totals: spent, received from boss, pending, balance."""
+        if not year_month:
+            year_month = datetime.now().strftime("%Y-%m")
+        conn = self._conn()
+        cur = conn.cursor()
+        if person_name:
+            cur.execute(
+                """SELECT COALESCE(SUM(amount),0), COALESCE(SUM(amount_received),0), COUNT(*)
+                   FROM expenses WHERE location=? AND date LIKE ? AND person_name=?""",
+                (location, f"{year_month}%", person_name)
+            )
+        else:
+            cur.execute(
+                """SELECT COALESCE(SUM(amount),0), COALESCE(SUM(amount_received),0), COUNT(*)
+                   FROM expenses WHERE location=? AND date LIKE ?""",
+                (location, f"{year_month}%")
+            )
+        row = cur.fetchone()
+        conn.close()
+        spent = float(row[0] or 0)
+        received = float(row[1] or 0)
+        count = int(row[2] or 0)
+        pending = max(0.0, spent - received)
+        balance = received - spent  # positive = money left from boss; negative = overspent
+        return {
+            "year_month": year_month,
+            "spent": spent,
+            "received": received,
+            "pending": pending,
+            "balance": balance,
+            "count": count,
+            "overspent": spent > received,
+        }
+
     def month_sales_total(self, location=None, year_month=None):
         if not year_month:
             year_month = datetime.now().strftime("%Y-%m")

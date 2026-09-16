@@ -14,6 +14,41 @@
 </div>
 {% endif %}
 
+{# This month: received from boss vs expenses #}
+{% if month_summary %}
+<div class="card rounded-xl p-4 mb-4">
+  <p class="text-xs text-gray-500 mb-3">
+    This month ({{ month_summary.year_month }})
+    {% if person_filter %} — {{ person_filter }}{% endif %}
+    · {{ month_summary.count }} expense(s)
+  </p>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+    <div>
+      <p class="text-xs text-gray-500">Received from boss</p>
+      <p class="text-green-400 font-semibold text-lg">Rs {{ "{:,.0f}".format(month_summary.received) }}</p>
+    </div>
+    <div>
+      <p class="text-xs text-gray-500">Total expenses</p>
+      <p class="text-red-400 font-semibold text-lg">Rs {{ "{:,.0f}".format(month_summary.spent) }}</p>
+    </div>
+    <div>
+      <p class="text-xs text-gray-500">Pending (not reimbursed)</p>
+      <p class="text-yellow-400 font-semibold text-lg">Rs {{ "{:,.0f}".format(month_summary.pending) }}</p>
+    </div>
+    <div>
+      <p class="text-xs text-gray-500">Balance (received − expenses)</p>
+      {% if month_summary.overspent %}
+      <p class="text-red-400 font-semibold text-lg">Rs {{ "{:,.0f}".format(month_summary.balance) }}</p>
+      <p class="text-xs text-red-400 mt-1">⚠ Expenses greater than received from boss</p>
+      {% else %}
+      <p class="text-green-400 font-semibold text-lg">Rs {{ "{:,.0f}".format(month_summary.balance) }}</p>
+      <p class="text-xs text-gray-500 mt-1">Money left from boss</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {# Persons summary cards — links to separate pages #}
 {% if persons and not person_filter %}
 <div class="mb-4">

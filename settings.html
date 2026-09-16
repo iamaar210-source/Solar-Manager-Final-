@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings + Login Alerts{% endblock %}
+{% block page_sub %}SMS + Email only when someone logs in · Owner only{% endblock %}
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="card rounded-xl p-5">
+    <h3 class="font-semibold neon mb-4">Login Alerts (SMS + Email)</h3>
+    <p class="text-sm text-gray-400 mb-4">
+      Alert is sent <strong class="text-yellow-400">only when someone logs in</strong> — to Owner phone and email.
+    </p>
+    <div class="space-y-3 text-sm">
+      <div>
+        <label class="text-xs text-gray-500">Owner Phone (SMS)</label>
+        <div class="input mt-1 bg-black/40">{{ alert_phone }}</div>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Owner Email</label>
+        <div class="input mt-1 bg-black/40">{{ alert_email }}</div>
+      </div>
+    </div>
+    <div class="mt-6 pt-4 border-t border-gray-800">
+      <h4 class="text-sm font-medium neon mb-2">How to enable real SMS</h4>
+      <p class="text-xs text-gray-400 mb-2">Set environment variables (Railway / local):</p>
+      <div class="bg-black/50 rounded-lg p-3 text-xs font-mono text-gray-300 space-y-1">
+        <div><span class="text-yellow-500">ALERT_PHONE</span>=03107319742</div>
+        <div><span class="text-yellow-500">ALERT_EMAIL</span>=sasolarandelectricco@gmail.com</div>
+        <div class="text-gray-500 mt-2"># Twilio</div>
+        <div><span class="text-yellow-500">TWILIO_ACCOUNT_SID</span>=ACxxxxxxxx</div>
+        <div><span class="text-yellow-500">TWILIO_AUTH_TOKEN</span>=your_token</div>
+        <div><span class="text-yellow-500">TWILIO_FROM_NUMBER</span>=+1234567890</div>
+        <div class="text-gray-500 mt-2"># Or local SMS API</div>
+        <div><span class="text-yellow-500">SMS_API_URL</span>=https://api.example.com/send?key={key}&to={phone}&message={message}</div>
+        <div><span class="text-yellow-500">SMS_API_KEY</span>=your_key</div>
+        <div class="text-gray-500 mt-2"># Email (Gmail)</div>
+        <div><span class="text-yellow-500">SMTP_HOST</span>=smtp.gmail.com</div>
+        <div><span class="text-yellow-500">SMTP_USER</span>=your@gmail.com</div>
+        <div><span class="text-yellow-500">SMTP_PASS</span>=app_password</div>
+      </div>
+      <p class="text-xs text-gray-500 mt-3">Without API keys, alerts go to logs/alerts.log (safe for testing).</p>
+    </div>
+  </div>
+  <div class="card rounded-xl p-5">
+    <h3 class="font-semibold neon mb-4">Accounts</h3>
+    <div class="space-y-2 text-sm">
+      <div class="bg-black/40 p-3 rounded border border-yellow-500/20">
+        <span class="neon">owner</span> / Owner@SA2026<br>
+        <span class="text-xs text-gray-500">Full access, all locations, Edit/Delete, Profit</span>
+      </div>
+      <div class="bg-black/40 p-3 rounded">
+        <span class="text-gray-300">ZAKWANMAIN-44</span> / MAINSHOPMIN — SA Main
+      </div>
+      <div class="bg-black/40 p-3 rounded">
+        <span class="text-gray-300">FARHANSA-44</span> / SASOLARMIN — SA Mumtaz
+      </div>
+      <div class="bg-black/40 p-3 rounded">
+        <span class="text-gray-300">SAMEERSHAHID-44</span> / UASOLARMIN — UA Kamoke
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ===== LOCKED: Data backup (Owner only — this whole page is already owner-only) ===== #}
+<div class="card rounded-xl p-5 mt-6 border border-yellow-500/30">
+  <div class="flex items-center justify-between mb-4">
+    <h3 class="font-semibold text-yellow-400">🔒 Data backup — Export / Import</h3>
+    <span class="text-xs bg-yellow-900/40 text-yellow-300 px-2 py-1 rounded">Owner locked</span>
+  </div>
+  <p class="text-sm text-gray-400 mb-4">
+    Download a full database backup, or restore from a previous <code class="text-yellow-400">.db</code> file.
+    Keep backups on your computer so data is never lost after a deploy.
+  </p>
+  <p class="text-xs text-gray-500 mb-4">
+    Current DB size:
+    {% if db_size %}{{ "%.1f"|format(db_size / 1024) }} KB{% else %}—{% endif %}
+  </p>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    {# EXPORT #}
+    <div class="bg-black/40 rounded-lg p-4 border border-green-500/20">
+      <h4 class="text-sm font-medium text-green-400 mb-2">Export (download backup)</h4>
+      <p class="text-xs text-gray-500 mb-3">Saves all customers, invoices, quotations, expenses, stock, etc.</p>
+      <a href="{{ url_for('main.settings_export_db') }}"
+         class="inline-block bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+        ⬇ Download database (.db)
+      </a>
+    </div>
+
+    {# IMPORT #}
+    <div class="bg-black/40 rounded-lg p-4 border border-red-500/20">
+      <h4 class="text-sm font-medium text-red-400 mb-2">Import (restore backup)</h4>
+      <p class="text-xs text-gray-500 mb-3">
+        Replaces current data with the uploaded file. Requires owner password.
+        A safety copy of the current DB is kept on the server.
+      </p>
+      <form method="POST" action="{{ url_for('main.settings_import_db') }}" enctype="multipart/form-data"
+            onsubmit="return confirm('This will REPLACE all current data with the backup. Continue?');">
+        <input type="file" name="backup_file" accept=".db,.sqlite,.sqlite3" required
+               class="block w-full text-xs text-gray-400 mb-2 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:bg-gray-700 file:text-white">
+        <input type="password" name="owner_password" class="input mb-2" placeholder="Owner password *" required>
+        <button type="submit" class="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+          ⬆ Import &amp; restore
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

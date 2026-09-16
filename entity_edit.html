@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block page_sub %}{% if can_edit %}Owner edit{% else %}Staff edit{% endif %}{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <a href="{{ back }}" class="text-sm text-gray-400 hover:text-white">← Back</a>
+</div>
+<div class="card rounded-xl p-6 max-w-2xl">
+  <form method="POST" action="{{ action }}" class="space-y-3">
+    {% for name, label, value, ftype in fields %}
+    <div>
+      <label class="text-xs text-gray-500 mb-1 block">{{ label }}</label>
+      <input name="{{ name }}" type="{{ ftype or 'text' }}" class="input" value="{{ value if value is not none else '' }}" {% if ftype == 'number' %}step="any"{% endif %}>
+    </div>
+    {% endfor %}
+    <button type="submit" class="btn-yellow px-6 py-2 rounded-lg text-sm font-semibold">Save changes</button>
+  </form>
+</div>
+{% endblock %}

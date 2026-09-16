@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Profit{% endblock %}
+{% block page_title %}Profit (Owner Only){% endblock %}
+{% block page_sub %}{{ loc_info.name }}{% endblock %}
+{% block content %}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  <div class="card rounded-xl p-5">
+    <div class="text-sm text-gray-400">Month Sales (Revenue)</div>
+    <div class="text-2xl font-bold text-green-400">Rs {{ "{:,.0f}".format(sales) }}</div>
+  </div>
+  <div class="card rounded-xl p-5">
+    <div class="text-sm text-gray-400">Month Expenses</div>
+    <div class="text-2xl font-bold text-red-400">Rs {{ "{:,.0f}".format(expenses) }}</div>
+  </div>
+  <div class="card rounded-xl p-5 border border-yellow-500/30">
+    <div class="text-sm text-yellow-400/90">Profit (Sales − Expenses)</div>
+    <div class="text-2xl font-bold neon">Rs {{ "{:,.0f}".format(net) }}</div>
+  </div>
+</div>
+
+<div class="card rounded-xl p-6 mb-4">
+  <h3 class="font-semibold text-lg mb-4 neon">Profit summary this month</h3>
+  <div class="space-y-3 text-sm max-w-md">
+    <div class="flex justify-between border-b border-gray-800 pb-2">
+      <span class="text-gray-400">Total Sales</span>
+      <span class="text-green-400 font-semibold">Rs {{ "{:,.0f}".format(sales) }}</span>
+    </div>
+    <div class="flex justify-between border-b border-gray-800 pb-2">
+      <span class="text-gray-400">Total Expenses</span>
+      <span class="text-red-400 font-semibold">− Rs {{ "{:,.0f}".format(expenses) }}</span>
+    </div>
+    <div class="flex justify-between pt-2 text-base">
+      <span class="font-bold">Net Profit</span>
+      <span class="font-bold {% if net >= 0 %}text-green-400{% else %}text-red-400{% endif %}">
+        Rs {{ "{:,.0f}".format(net) }}
+      </span>
+    </div>
+  </div>
+  <p class="text-xs text-gray-500 mt-4">Formula: <strong>Sales − Expenses = Profit</strong>. This section is Owner-only.</p>
+</div>
+{% endblock %}

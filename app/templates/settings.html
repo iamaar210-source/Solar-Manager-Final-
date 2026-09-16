@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block page_title %}Settings + Login Alerts{% endblock %}
+{% block page_sub %}SMS + Email only when someone logs in{% endblock %}
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="card rounded-xl p-5">
+    <h3 class="font-semibold neon mb-4">Login Alerts (SMS + Email)</h3>
+    <p class="text-sm text-gray-400 mb-4">
+      Alert is sent <strong class="text-yellow-400">only when someone logs in</strong> — to Owner phone and email.
+    </p>
+    <div class="space-y-3 text-sm">
+      <div>
+        <label class="text-xs text-gray-500">Owner Phone (SMS)</label>
+        <div class="input mt-1 bg-black/40">{{ alert_phone }}</div>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Owner Email</label>
+        <div class="input mt-1 bg-black/40">{{ alert_email }}</div>
+      </div>
+    </div>
+    <div class="mt-6 pt-4 border-t border-gray-800">
+      <h4 class="text-sm font-medium neon mb-2">How to enable real SMS</h4>
+      <p class="text-xs text-gray-400 mb-2">Set environment variables (Railway / local):</p>
+      <div class="bg-black/50 rounded-lg p-3 text-xs font-mono text-gray-300 space-y-1">
+        <div><span class="text-yellow-500">ALERT_PHONE</span>=03107319742</div>
+        <div><span class="text-yellow-500">ALERT_EMAIL</span>=sasolarandelectricco@gmail.com</div>
+        <div class="text-gray-500 mt-2"># Twilio</div>
+        <div><span class="text-yellow-500">TWILIO_ACCOUNT_SID</span>=ACxxxxxxxx</div>
+        <div><span class="text-yellow-500">TWILIO_AUTH_TOKEN</span>=your_token</div>
+        <div><span class="text-yellow-500">TWILIO_FROM_NUMBER</span>=+1234567890</div>
+        <div class="text-gray-500 mt-2"># Or local SMS API</div>
+        <div><span class="text-yellow-500">SMS_API_URL</span>=https://api.example.com/send?key={key}&to={phone}&message={message}</div>
+        <div><span class="text-yellow-500">SMS_API_KEY</span>=your_key</div>
+        <div class="text-gray-500 mt-2"># Email (Gmail)</div>
+        <div><span class="text-yellow-500">SMTP_HOST</span>=smtp.gmail.com</div>
+        <div><span class="text-yellow-500">SMTP_USER</span>=your@gmail.com</div>
+        <div><span class="text-yellow-500">SMTP_PASS</span>=app_password</div>
+      </div>
+      <p class="text-xs text-gray-500 mt-3">Without API keys, alerts go to logs/alerts.log (safe for testing).</p>
+    </div>
+  </div>
+  <div class="card rounded-xl p-5">
+    <h3 class="font-semibold neon mb-4">Accounts</h3>
+    <div class="space-y-2 text-sm">
+      <div class="bg-black/40 p-3 rounded border border-yellow-500/20">
+        <span class="neon">owner</span> / Owner@SA2026<br>
+        <span class="text-xs text-gray-500">Full access, all locations, Edit/Delete, Profit</span>
+      </div>
+      <div class="bg-black/40 p-3 rounded">
+        <span class="text-gray-300">ZAKWANMAIN-44</span> / MAINSHOPMIN — SA Main
+      </div>
+      <div class="bg-black/40 p-3 rounded">
+        <span class="text-gray-300">FARHANSA-44</span> / SASOLARMIN — SA Mumtaz
+      </div>
+      <div class="bg-black/40 p-3 rounded">
+        <span class="text-gray-300">SAMEERSHAHID-44</span> / UASOLARMIN — UA Kamoke
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

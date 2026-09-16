@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Expenses{% endblock %}
+{% block page_title %}{% if person_filter %}Expenses — {{ person_filter }}{% else %}Daily Expenses{% endif %}{% endblock %}
+{% block page_sub %}{{ loc_info.name }}{% endblock %}
+{% block content %}
+<div class="flex justify-end gap-2 mb-3">
+  <a href="{{ url_for('main.expenses_excel') }}" class="bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg text-sm font-semibold">📊 Excel</a>
+</div>
+
+{% if person_filter %}
+<div class="mb-4 flex items-center gap-3">
+  <a href="{{ url_for('main.expenses') }}" class="text-sm text-gray-400 hover:text-white">← All expenses</a>
+  <span class="text-sm text-yellow-400 font-semibold">Person: {{ person_filter }}</span>
+</div>
+{% endif %}
+
+{# Persons summary cards — links to separate pages #}
+{% if persons and not person_filter %}
+<div class="mb-4">
+  <p class="text-xs text-gray-500 mb-2">Expenses by person (click for separate page)</p>
+  <div class="flex flex-wrap gap-2">
+    {% for p in persons %}
+    <a href="{{ url_for('main.expenses_by_person', person_name=p.person_name) }}"
+       class="card rounded-lg px-3 py-2 text-sm hover:ring-1 hover:ring-yellow-500/50 transition">
+      <span class="font-medium text-white">{{ p.person_name }}</span>
+      <span class="text-gray-400 text-xs ml-2">{{ p.expense_count }} items</span>
+      <div class="text-xs mt-1">
+        <span class="text-red-400">Spent Rs {{ "{:,.0f}".format(p.total_amount) }}</span>
+        <span class="text-green-400 ml-2">Recv Rs {{ "{:,.0f}".format(p.total_received) }}</span>
+        {% if p.pending > 0 %}
+        <span class="text-yellow-400 ml-2">Pending Rs {{ "{:,.0f}".format(p.pending) }}</span>
+        {% endif %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="flex justify-between items-center mb-4">
+  <p class="text-sm text-gray-400">
+    {% if person_filter %}Expenses for {{ person_filter }} only.{% else %}Expenses for this location only.{% endif %}
+  </p>
+  <button onclick="document.getElementById('add-form').classList.toggle('hidden')" class="btn-yellow px-4 py-2 rounded-lg text-sm font-semibold">+ Add Expense</button>
+</div>
+
+<div id="add-form" class="card rounded-xl p-5 mb-4 hidden">
+  <form method="POST" action="{{ url_for('main.expenses_add') }}" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+    {% if person_filter %}
+    <input type="hidden" name="redirect_person" value="{{ person_filter }}">
+    <input type="hidden" name="person_name" value="{{ person_filter }}">
+    {% endif %}
+    <input name="date" type="date" class="input" value="">
+    <input name="category" class="input" placeholder="Category" value="General">
+    <input name="amount" type="number" step="any" class="input" placeholder="Amount spent *" required>
+    <input name="amount_received" type="number" step="any" class="input" placeholder="Received from boss (0)" value="0">
+    {% if not person_filter %}
+    <select name="person_name" class="input">
+      <option value="">— Person who did expense —</option>
+      {% for emp in employees %}
+      <option value="{{ emp.name }}">{{ emp.name }}{% if emp.role %} ({{ emp.role }}){% endif %}</option>
+      {% endfor %}
+    </select>
+    <input name="person_custom" class="input" placeholder="Or type name if not in list">
+    {% endif %}
+    <input name="description" class="input" placeholder="Description">
+    <button type="submit" class="btn-yellow px-4 py-2 rounded-lg text-sm font-semibold">Save</button>
+  </form>
+</div>
+
+<div class="card rounded-xl overflow-hidden">
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        {% if not person_filter %}<th>Person</th>{% endif %}
+        <th>Category</th>
+        <th>Description</th>
+        <th>Amount</th>
+        <th>Received</th>
+        <th>Pending</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in expenses %}
+      {% set amt = e.amount or 0 %}
+      {% set recv = e.amount_received or 0 %}
+      {% set pend = amt - recv if amt > recv else 0 %}
+      {% set st = e.payment_status or 'Pending' %}
+      <tr>
+        <td>{{ e.date }}</td>
+        {% if not person_filter %}
+        <td>
+          {% if e.person_name %}
+          <a href="{{ url_for('main.expenses_by_person', person_name=e.person_name) }}" class="text-yellow-400 hover:underline">{{ e.person_name }}</a>
+          {% else %}<span class="text-gray-600">—</span>{% endif %}
+        </td>
+        {% endif %}
+        <td>{{ e.category }}</td>
+        <td class="text-gray-400">{{ e.description or '—' }}</td>
+        <td class="text-red-400 font-medium">Rs {{ "{:,.0f}".format(amt) }}</td>
+        <td class="text-green-400">Rs {{ "{:,.0f}".format(recv) }}</td>
+        <td class="{% if pend > 0 %}text-yellow-400{% else %}text-gray-500{% endif %}">Rs {{ "{:,.0f}".format(pend) }}</td>
+        <td>
+          {% if st == 'Received' %}
+          <span class="text-xs text-green-400">Received</span>
+          {% elif st == 'Partial' %}
+          <span class="text-xs text-yellow-400">Partial</span>
+          {% else %}
+          <span class="text-xs text-red-400">Pending</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if can_edit %}
+          <a href="{{ url_for('main.expense_edit', eid=e.id) }}" class="text-xs text-yellow-400 hover:underline mr-2">Edit</a>
+          {% if pend > 0 or True %}
+          <button type="button" onclick="document.getElementById('recv-{{ e.id }}').classList.toggle('hidden')" class="text-xs text-green-400 hover:underline mr-2">+ Received</button>
+          {% endif %}
+          <form method="POST" action="{{ url_for('main.expenses_delete', eid=e.id) }}" class="inline" onsubmit="return confirm('Delete?')">
+            <button class="text-xs text-red-400 hover:underline">Delete</button>
+          </form>
+          <div id="recv-{{ e.id }}" class="hidden mt-2">
+            <form method="POST" action="{{ url_for('main.expenses_receive', eid=e.id) }}" class="flex gap-1 items-center">
+              <input name="extra_received" type="number" step="any" class="input text-xs py-1 w-24" placeholder="Amount" required>
+              <button type="submit" class="text-xs bg-green-700 hover:bg-green-600 text-white px-2 py-1 rounded">Add</button>
+            </form>
+          </div>
+          {% else %}<span class="text-xs text-gray-600">View only</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="{% if person_filter %}8{% else %}9{% endif %}" class="text-center text-gray-500 py-8">No expenses yet</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

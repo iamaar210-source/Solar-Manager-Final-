@@ -131,6 +131,17 @@ class Database:
         except Exception:
             pass
 
+        # Safe migrations for expenses (keeps existing data)
+        for col, typedef in [
+            ("person_name", "TEXT DEFAULT ''"),
+            ("amount_received", "REAL DEFAULT 0"),
+            ("payment_status", "TEXT DEFAULT 'Pending'"),
+        ]:
+            try:
+                cur.execute(f"ALTER TABLE expenses ADD COLUMN {col} {typedef}")
+            except Exception:
+                pass
+
         tables = [
             ("customers", """
                 name TEXT NOT NULL, phone TEXT, email TEXT, address TEXT,
@@ -139,7 +150,9 @@ class Database:
             """),
             ("expenses", """
                 date TEXT NOT NULL, category TEXT DEFAULT 'General',
-                amount REAL NOT NULL, description TEXT, created_at TEXT
+                amount REAL NOT NULL, description TEXT, created_at TEXT,
+                person_name TEXT DEFAULT '', amount_received REAL DEFAULT 0,
+                payment_status TEXT DEFAULT 'Pending'
             """),
             ("employees", """
                 name TEXT NOT NULL, phone TEXT, role TEXT DEFAULT 'Staff',
@@ -455,18 +468,34 @@ class Database:
         row = cur.fetchone(); conn.close()
         return _row_to_dict(row) if row else None
 
-    def update_expense(self, eid, location, date=None, category=None, amount=None, description=None):
+    def _expense_payment_status(self, amount, amount_received):
+        amount = float(amount or 0)
+        received = float(amount_received or 0)
+        if received >= amount and amount > 0:
+            return "Received"
+        if received > 0:
+            return "Partial"
+        return "Pending"
+
+    def update_expense(self, eid, location, date=None, category=None, amount=None, description=None,
+                       person_name=None, amount_received=None):
         conn = self._conn(); cur = conn.cursor()
         cur.execute("SELECT * FROM expenses WHERE id=? AND location=?", (eid, location))
         row = cur.fetchone()
         if not row:
             conn.close(); raise ValueError("Expense not found")
         r = dict(row) if not isinstance(row, dict) else row
+        new_amount = float(amount if amount is not None else r.get("amount") or 0)
+        new_received = float(amount_received if amount_received is not None else r.get("amount_received") or 0)
+        status = self._expense_payment_status(new_amount, new_received)
         cur.execute(
-            """UPDATE expenses SET date=?, category=?, amount=?, description=? WHERE id=? AND location=?""",
+            """UPDATE expenses SET date=?, category=?, amount=?, description=?,
+               person_name=?, amount_received=?, payment_status=? WHERE id=? AND location=?""",
             (date or r.get("date"), category or r.get("category"),
-             float(amount if amount is not None else r.get("amount") or 0),
+             new_amount,
              description if description is not None else r.get("description"),
+             person_name if person_name is not None else (r.get("person_name") or ""),
+             new_received, status,
              eid, location)
         )
         conn.commit(); conn.close()
@@ -604,25 +633,82 @@ class Database:
         conn.close()
         return n
 
-    def get_expenses(self, location, limit=100):
+    def get_expenses(self, location, limit=100, person_name=None):
         conn = self._conn()
         cur = conn.cursor()
-        cur.execute("SELECT * FROM expenses WHERE location=? ORDER BY date DESC, id DESC LIMIT ?", (location, limit))
+        if person_name:
+            cur.execute(
+                "SELECT * FROM expenses WHERE location=? AND person_name=? ORDER BY date DESC, id DESC LIMIT ?",
+                (location, person_name, limit)
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM expenses WHERE location=? ORDER BY date DESC, id DESC LIMIT ?",
+                (location, limit)
+            )
         rows = _rows_to_dicts(cur.fetchall())
         conn.close()
         return rows
 
-    def add_expense(self, location, date, category, amount, description=""):
+    def get_expense_persons(self, location):
+        """Unique person names who have expenses, with totals."""
         conn = self._conn()
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO expenses (location, date, category, amount, description, created_at) VALUES (?,?,?,?,?,?)",
-            (location, date, category, amount, description, datetime.now().isoformat())
+            """SELECT person_name,
+                      COUNT(*) as expense_count,
+                      COALESCE(SUM(amount),0) as total_amount,
+                      COALESCE(SUM(amount_received),0) as total_received
+               FROM expenses
+               WHERE location=? AND person_name IS NOT NULL AND person_name != ''
+               GROUP BY person_name
+               ORDER BY person_name""",
+            (location,)
+        )
+        rows = _rows_to_dicts(cur.fetchall())
+        conn.close()
+        for r in rows:
+            total = float(r.get("total_amount") or 0)
+            received = float(r.get("total_received") or 0)
+            r["pending"] = max(0, total - received)
+        return rows
+
+    def add_expense(self, location, date, category, amount, description="", person_name="", amount_received=0):
+        conn = self._conn()
+        cur = conn.cursor()
+        amount = float(amount or 0)
+        received = float(amount_received or 0)
+        status = self._expense_payment_status(amount, received)
+        cur.execute(
+            """INSERT INTO expenses (location, date, category, amount, description, created_at,
+               person_name, amount_received, payment_status) VALUES (?,?,?,?,?,?,?,?,?)""",
+            (location, date, category, amount, description, datetime.now().isoformat(),
+             (person_name or "").strip(), received, status)
         )
         conn.commit()
         eid = cur.lastrowid
         conn.close()
         return eid
+
+    def add_expense_received(self, eid, location, extra_received):
+        """Add more payment received from boss; updates amount_received and status."""
+        conn = self._conn(); cur = conn.cursor()
+        cur.execute("SELECT * FROM expenses WHERE id=? AND location=?", (eid, location))
+        row = cur.fetchone()
+        if not row:
+            conn.close(); raise ValueError("Expense not found")
+        r = dict(row) if not isinstance(row, dict) else row
+        new_received = float(r.get("amount_received") or 0) + float(extra_received or 0)
+        if new_received < 0:
+            new_received = 0
+        amount = float(r.get("amount") or 0)
+        status = self._expense_payment_status(amount, new_received)
+        cur.execute(
+            "UPDATE expenses SET amount_received=?, payment_status=? WHERE id=? AND location=?",
+            (new_received, status, eid, location)
+        )
+        conn.commit(); conn.close()
+        return new_received, status
 
     def delete_expense(self, eid, location):
         conn = self._conn()

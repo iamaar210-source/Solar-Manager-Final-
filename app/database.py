@@ -471,6 +471,8 @@ class Database:
     def _expense_payment_status(self, amount, amount_received):
         amount = float(amount or 0)
         received = float(amount_received or 0)
+        if received > amount and amount >= 0:
+            return "Extra"  # boss sent more than the expense
         if received >= amount and amount > 0:
             return "Received"
         if received > 0:
@@ -671,6 +673,7 @@ class Database:
             total = float(r.get("total_amount") or 0)
             received = float(r.get("total_received") or 0)
             r["pending"] = max(0, total - received)
+            r["extra"] = max(0, received - total)  # boss sent more than spent
         return rows
 
     def add_expense(self, location, date, category, amount, description="", person_name="", amount_received=0):
@@ -755,12 +758,14 @@ class Database:
         received = float(row[1] or 0)
         count = int(row[2] or 0)
         pending = max(0.0, spent - received)
-        balance = received - spent  # positive = money left from boss; negative = overspent
+        extra = max(0.0, received - spent)  # extra amount boss sent beyond expenses
+        balance = received - spent  # positive = money left / extra; negative = overspent
         return {
             "year_month": year_month,
             "spent": spent,
             "received": received,
             "pending": pending,
+            "extra": extra,
             "balance": balance,
             "count": count,
             "overspent": spent > received,

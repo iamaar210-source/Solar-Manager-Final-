@@ -22,7 +22,7 @@
     {% if person_filter %} — {{ person_filter }}{% endif %}
     · {{ month_summary.count }} expense(s)
   </p>
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
     <div>
       <p class="text-xs text-gray-500">Received from boss</p>
       <p class="text-green-400 font-semibold text-lg">Rs {{ "{:,.0f}".format(month_summary.received) }}</p>
@@ -36,13 +36,18 @@
       <p class="text-yellow-400 font-semibold text-lg">Rs {{ "{:,.0f}".format(month_summary.pending) }}</p>
     </div>
     <div>
+      <p class="text-xs text-gray-500">Extra (boss sent more)</p>
+      <p class="text-cyan-400 font-semibold text-lg">Rs {{ "{:,.0f}".format(month_summary.extra or 0) }}</p>
+      <p class="text-xs text-gray-500 mt-1">With employee beyond expenses</p>
+    </div>
+    <div>
       <p class="text-xs text-gray-500">Balance (received − expenses)</p>
       {% if month_summary.overspent %}
       <p class="text-red-400 font-semibold text-lg">Rs {{ "{:,.0f}".format(month_summary.balance) }}</p>
       <p class="text-xs text-red-400 mt-1">⚠ Expenses greater than received from boss</p>
       {% else %}
       <p class="text-green-400 font-semibold text-lg">Rs {{ "{:,.0f}".format(month_summary.balance) }}</p>
-      <p class="text-xs text-gray-500 mt-1">Money left from boss</p>
+      <p class="text-xs text-gray-500 mt-1">Money left / extra with employee</p>
       {% endif %}
     </div>
   </div>
@@ -64,6 +69,9 @@
         <span class="text-green-400 ml-2">Recv Rs {{ "{:,.0f}".format(p.total_received) }}</span>
         {% if p.pending > 0 %}
         <span class="text-yellow-400 ml-2">Pending Rs {{ "{:,.0f}".format(p.pending) }}</span>
+        {% endif %}
+        {% if (p.extra or 0) > 0 %}
+        <span class="text-cyan-400 ml-2">Extra Rs {{ "{:,.0f}".format(p.extra) }}</span>
         {% endif %}
       </div>
     </a>
@@ -114,6 +122,7 @@
         <th>Amount</th>
         <th>Received</th>
         <th>Pending</th>
+        <th>Extra</th>
         <th>Status</th>
         <th>Actions</th>
       </tr>
@@ -123,6 +132,7 @@
       {% set amt = e.amount or 0 %}
       {% set recv = e.amount_received or 0 %}
       {% set pend = amt - recv if amt > recv else 0 %}
+      {% set extra = recv - amt if recv > amt else 0 %}
       {% set st = e.payment_status or 'Pending' %}
       <tr>
         <td>{{ e.date }}</td>
@@ -138,8 +148,11 @@
         <td class="text-red-400 font-medium">Rs {{ "{:,.0f}".format(amt) }}</td>
         <td class="text-green-400">Rs {{ "{:,.0f}".format(recv) }}</td>
         <td class="{% if pend > 0 %}text-yellow-400{% else %}text-gray-500{% endif %}">Rs {{ "{:,.0f}".format(pend) }}</td>
+        <td class="{% if extra > 0 %}text-cyan-400 font-medium{% else %}text-gray-500{% endif %}">Rs {{ "{:,.0f}".format(extra) }}</td>
         <td>
-          {% if st == 'Received' %}
+          {% if st == 'Extra' %}
+          <span class="text-xs text-cyan-400">Extra</span>
+          {% elif st == 'Received' %}
           <span class="text-xs text-green-400">Received</span>
           {% elif st == 'Partial' %}
           <span class="text-xs text-yellow-400">Partial</span>
@@ -166,7 +179,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="{% if person_filter %}8{% else %}9{% endif %}" class="text-center text-gray-500 py-8">No expenses yet</td></tr>
+      <tr><td colspan="{% if person_filter %}9{% else %}10{% endif %}" class="text-center text-gray-500 py-8">No expenses yet</td></tr>
       {% endfor %}
     </tbody>
   </table>

@@ -978,11 +978,12 @@ def expenses_excel():
             recv = float(r.get("amount_received") or 0)
             data.append([
                 r.get("date"), r.get("person_name") or "", r.get("category"),
-                amt, recv, max(0, amt - recv), r.get("payment_status") or "Pending",
+                amt, recv, max(0, amt - recv), max(0, recv - amt),
+                r.get("payment_status") or "Pending",
                 r.get("description") or "",
             ])
         return _excel_response(f"expenses_{loc}.xlsx",
-            ["Date", "Person", "Category", "Amount", "Received", "Pending", "Status", "Description"], data)
+            ["Date", "Person", "Category", "Amount", "Received", "Pending", "Extra", "Status", "Description"], data)
     except Exception as e:
         flash(f"Excel error: {e}", "error")
         return redirect(url_for("main.expenses"))

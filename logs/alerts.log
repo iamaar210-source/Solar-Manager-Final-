@@ -1,0 +1,6 @@
+2026-10-11 12:05:58,772 [INFO] [SMS LOG ONLY] To: 03107319742 | Message: Solar Manager Login Alert | User: Owner (owner) | Location: Owner | Time: 2026-10-11 12:05:58 | IP: 127.0.0.1
+2026-10-11 12:05:58,773 [INFO] [EMAIL LOG ONLY] To: sasolarandelectricco@gmail.com | Subject: Login Alert: owner | Solar Manager Login Alert | User: Owner (owner) | Location: Owner | Time: 2026-10-11 12:05:58 | IP: 127.0.0.1
+2026-10-11 12:05:58,773 [INFO] Login alert for owner | SMS=True Email=True | to phone=03107319742 email=sasolarandelectricco@gmail.com
+2026-10-11 12:06:43,858 [INFO] [SMS LOG ONLY] To: 03107319742 | Message: Solar Manager Login Alert | User: Owner (owner) | Location: Owner | Time: 2026-10-11 12:06:43 | IP: 127.0.0.1
+2026-10-11 12:06:43,858 [INFO] [EMAIL LOG ONLY] To: sasolarandelectricco@gmail.com | Subject: Login Alert: owner | Solar Manager Login Alert | User: Owner (owner) | Location: Owner | Time: 2026-10-11 12:06:43 | IP: 127.0.0.1
+2026-10-11 12:06:43,858 [INFO] Login alert for owner | SMS=True Email=True | to phone=03107319742 email=sasolarandelectricco@gmail.com

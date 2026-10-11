@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ q.quote_no }}{% endblock %}
+{% block page_title %}Edit Quotation {{ q.quote_no }}{% endblock %}
+{% block page_sub %}Edit customer, items, prices & totals{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <a href="{{ url_for('main.quotation_view', qid=q.id) }}" class="text-sm text-gray-400 hover:text-white">← Back to quotation</a>
+</div>
+
+<div class="card rounded-xl p-5">
+  <form method="POST" id="quote-edit-form">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+      <div>
+        <label class="text-xs text-gray-500">Customer name *</label>
+        <input name="customer_name" class="input" value="{{ q.customer_name or '' }}" required>
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Phone</label>
+        <input name="customer_phone" class="input" value="{{ q.customer_phone or '' }}">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Address</label>
+        <input name="customer_address" class="input" value="{{ q.customer_address or '' }}">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Date</label>
+        <input name="date" type="date" class="input" value="{{ q.date or '' }}">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Discount (Rs)</label>
+        <input name="discount" type="number" step="any" class="input" value="{{ q.discount or 0 }}" oninput="recalcQuoteLines()">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500">Status</label>
+        <select name="status" class="input">
+          {% set st = q.status or 'Draft' %}
+          <option value="Draft" {% if st == 'Draft' %}selected{% endif %}>Draft</option>
+          <option value="Sent" {% if st == 'Sent' %}selected{% endif %}>Sent</option>
+          <option value="Accepted" {% if st == 'Accepted' %}selected{% endif %}>Accepted</option>
+          <option value="Rejected" {% if st == 'Rejected' %}selected{% endif %}>Rejected</option>
+          <option value="Converted" {% if st == 'Converted' %}selected{% endif %}>Converted</option>
+        </select>
+      </div>
+      <div class="md:col-span-3">
+        <label class="text-xs text-gray-500">Notes</label>
+        <input name="notes" class="input" value="{{ q.notes or '' }}">
+      </div>
+    </div>
+
+    <p class="text-xs text-gray-400 mb-2">
+      Edit items below — name, qty, and <strong class="text-yellow-400">sale price</strong> are all editable.
+      Subtotal recalculates automatically.
+    </p>
+
+    <div id="q-items">
+      {# Use .get() — q.items is dict method, not line items #}
+      {% set line_items = q.get('items') or q.get('line_items') or [] %}
+      {% for it in line_items %}
+      <div class="grid grid-cols-12 gap-2 mb-2 item-row items-center">
+        <input name="item_name[]" class="input col-span-3" placeholder="Item name *" list="stock-list"
+               value="{{ it.item_name or '' }}" required onchange="fillPrice(this)" oninput="fillPrice(this)">
+        <input name="qty[]" type="number" step="any" class="input col-span-2" placeholder="Qty"
+               value="{{ it.quantity or 1 }}" required oninput="recalcQuoteLines()" onchange="recalcQuoteLines()">
+        <input name="price[]" type="number" step="any" class="input col-span-2" placeholder="Sale price *"
+               value="{{ it.unit_price or 0 }}" required oninput="recalcQuoteLines()" onchange="recalcQuoteLines()">
+        <span class="col-span-3 text-xs text-yellow-400 font-semibold line-sub">
+          Subtotal: Rs {{ "{:,.0f}".format((it.quantity or 0) * (it.unit_price or 0)) }}
+        </span>
+        <button type="button" onclick="this.closest('.item-row').remove(); recalcQuoteLines()"
+                class="col-span-2 text-red-400 text-sm text-left">✕ Remove</button>
+      </div>
+      {% else %}
+      <div class="grid grid-cols-12 gap-2 mb-2 item-row items-center">
+        <input name="item_name[]" class="input col-span-3" placeholder="Item name *" list="stock-list" required
+               onchange="fillPrice(this)" oninput="fillPrice(this)">
+        <input name="qty[]" type="number" step="any" class="input col-span-2" placeholder="Qty" value="1" required
+               oninput="recalcQuoteLines()" onchange="recalcQuoteLines()">
+        <input name="price[]" type="number" step="any" class="input col-span-2" placeholder="Sale price *" required
+               oninput="recalcQuoteLines()" onchange="recalcQuoteLines()">
+        <span class="col-span-3 text-xs text-yellow-400 font-semibold line-sub">Subtotal: Rs 0</span>
+        <button type="button" onclick="this.closest('.item-row').remove(); recalcQuoteLines()"
+                class="col-span-2 text-red-400 text-sm text-left">✕ Remove</button>
+      </div>
+      {% endfor %}
+    </div>
+
+    <datalist id="stock-list">{% for s in stock %}<option value="{{ s.item_name }}">{% endfor %}</datalist>
+    <button type="button" onclick="addQuoteRow()" class="text-sm text-yellow-400 mb-3">+ Add Item</button>
+    <div id="quote-grand-subtotal" class="text-sm text-yellow-400 font-semibold mb-4"></div>
+
+    <button type="submit" class="btn-yellow px-6 py-2 rounded-lg text-sm font-semibold">Save quotation</button>
+  </form>
+</div>
+
+<script>
+var STOCK_PRICES = {
+{% for s in stock %}
+  {{ s.item_name|tojson }}: {{ s.sale_price or 0 }},
+{% endfor %}
+};
+var STOCK_COST = {
+{% for s in stock %}
+  {{ s.item_name|tojson }}: {{ s.purchase_price or 0 }},
+{% endfor %}
+};
+function recalcQuoteLines(){
+  var rows = document.querySelectorAll('#q-items .item-row');
+  var grand = 0;
+  rows.forEach(function(row){
+    var q = parseFloat((row.querySelector('input[name="qty[]"]')||{}).value) || 0;
+    var p = parseFloat((row.querySelector('input[name="price[]"]')||{}).value) || 0;
+    var sub = q * p;
+    grand += sub;
+    var el = row.querySelector('.line-sub');
+    if(el) el.textContent = 'Subtotal: Rs ' + Math.round(sub).toLocaleString();
+  });
+  var disc = parseFloat((document.querySelector('input[name="discount"]')||{}).value) || 0;
+  var total = Math.max(0, grand - disc);
+  var g = document.getElementById('quote-grand-subtotal');
+  if(g) g.textContent = rows.length
+    ? ('Items subtotal: Rs ' + Math.round(grand).toLocaleString() + '  ·  Total after discount: Rs ' + Math.round(total).toLocaleString())
+    : '';
+}
+function fillPrice(inp){
+  var row = inp.closest('.item-row');
+  if(!row) return;
+  var price = row.querySelector('input[name="price[]"]');
+  // Only auto-fill if price is empty / zero so we don't overwrite an edited price
+  if(price && STOCK_PRICES[inp.value] != null){
+    var cur = parseFloat(price.value) || 0;
+    if(cur === 0) price.value = STOCK_PRICES[inp.value];
+  }
+  checkQuotePrice(row);
+  recalcQuoteLines();
+}
+function checkQuotePrice(row){
+  if(!row) return;
+  var nameInp = row.querySelector('input[name="item_name[]"]');
+  var priceInp = row.querySelector('input[name="price[]"]');
+  if(!nameInp || !priceInp) return;
+  var sale = parseFloat(priceInp.value) || 0;
+  var cost = STOCK_COST[nameInp.value] || 0;
+  if(cost > 0 && sale > 0 && sale < cost){
+    priceInp.classList.add('border-red-500');
+  } else {
+    priceInp.classList.remove('border-red-500');
+  }
+}
+function addQuoteRow(){
+  var area = document.getElementById('q-items');
+  var div = document.createElement('div');
+  div.className = 'grid grid-cols-12 gap-2 mb-2 item-row items-center';
+  div.innerHTML =
+    '<input name="item_name[]" class="input col-span-3" placeholder="Item name *" list="stock-list" required onchange="fillPrice(this)" oninput="fillPrice(this)">' +
+    '<input name="qty[]" type="number" step="any" class="input col-span-2" placeholder="Qty" value="1" required oninput="recalcQuoteLines()" onchange="recalcQuoteLines()">' +
+    '<input name="price[]" type="number" step="any" class="input col-span-2" placeholder="Sale price *" required oninput="recalcQuoteLines()" onchange="recalcQuoteLines()">' +
+    '<span class="col-span-3 text-xs text-yellow-400 font-semibold line-sub">Subtotal: Rs 0</span>' +
+    '<button type="button" onclick="this.closest(\'.item-row\').remove(); recalcQuoteLines()" class="col-span-2 text-red-400 text-sm text-left">✕ Remove</button>';
+  area.appendChild(div);
+  recalcQuoteLines();
+}
+document.getElementById('quote-edit-form').addEventListener('submit', function(e){
+  var rows = document.querySelectorAll('#q-items .item-row');
+  var warnings = [];
+  for(var i=0;i<rows.length;i++){
+    var name = rows[i].querySelector('input[name="item_name[]"]');
+    var price = rows[i].querySelector('input[name="price[]"]');
+    if(!name || !price) continue;
+    var sale = parseFloat(price.value) || 0;
+    var cost = STOCK_COST[name.value] || 0;
+    if(cost > 0 && sale > 0 && sale < cost){
+      warnings.push('"' + name.value + '": sale Rs ' + sale + ' < purchase Rs ' + cost);
+    }
+  }
+  if(warnings.length){
+    var ok = confirm('WARNING: Sale price is lower than purchase price:\n\n' + warnings.join('\n') + '\n\nSave quotation anyway?');
+    if(!ok){
+      e.preventDefault();
+      return false;
+    }
+  }
+});
+recalcQuoteLines();
+</script>
+{% endblock %}

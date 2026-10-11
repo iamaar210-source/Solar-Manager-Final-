@@ -586,23 +586,45 @@ class Database:
         return _row_to_dict(row) if row else None
 
     def update_quotation(self, qid, location, customer_name=None, customer_phone=None, customer_address=None,
-                         discount=None, notes=None, date=None, status=None):
+                         discount=None, notes=None, date=None, status=None, items=None):
+        """Update quotation header and optionally replace all line items."""
         conn = self._conn(); cur = conn.cursor()
         cur.execute("SELECT * FROM quotations WHERE id=? AND location=?", (qid, location))
         row = cur.fetchone()
         if not row:
             conn.close(); raise ValueError("Quotation not found")
         r = dict(row) if not isinstance(row, dict) else row
-        subtotal = float(r.get("subtotal") or 0)
+
+        if items is not None:
+            # Replace all line items and recalculate subtotal
+            cur.execute("DELETE FROM quotation_items WHERE quotation_id=?", (qid,))
+            subtotal = 0.0
+            for it in items:
+                name = (it.get("item_name") or "").strip()
+                qty = float(it.get("quantity") or 0)
+                price = float(it.get("unit_price") or 0)
+                if not name or qty <= 0:
+                    continue
+                line_total = qty * price
+                subtotal += line_total
+                cur.execute(
+                    """INSERT INTO quotation_items
+                       (location, quotation_id, item_name, quantity, unit, unit_price, line_total)
+                       VALUES (?,?,?,?,?,?,?)""",
+                    (location, qid, name, qty, it.get("unit") or "pcs", price, line_total)
+                )
+        else:
+            subtotal = float(r.get("subtotal") or 0)
+
         discount = float(discount if discount is not None else r.get("discount") or 0)
         total = max(0, subtotal - discount)
         cur.execute(
             """UPDATE quotations SET customer_name=?, customer_phone=?, customer_address=?,
-               discount=?, total=?, notes=?, date=?, status=? WHERE id=? AND location=?""",
+               subtotal=?, discount=?, total=?, notes=?, date=?, status=? WHERE id=? AND location=?""",
             (customer_name if customer_name is not None else r.get("customer_name"),
              customer_phone if customer_phone is not None else r.get("customer_phone"),
              customer_address if customer_address is not None else r.get("customer_address"),
-             discount, total,
+             subtotal, discount, total,
              notes if notes is not None else r.get("notes"),
              date if date is not None else r.get("date"),
              status if status is not None else r.get("status"),

@@ -1265,7 +1265,7 @@ def stock_edit(iid):
 @bp.route("/quotations/<int:qid>/edit", methods=["GET", "POST"])
 @login_required
 def quotation_edit(qid):
-    """Owner AND employees can edit quotations."""
+    """Owner AND employees can edit quotations including line items and prices."""
     user = get_current_user()
     if not can_edit_quotation(user):
         flash("Login required", "error")
@@ -1275,27 +1275,49 @@ def quotation_edit(qid):
     if not q:
         flash("Not found", "error"); return redirect(url_for("main.quotations"))
     if request.method == "POST":
-        db.update_quotation(qid, loc,
+        names = request.form.getlist("item_name[]")
+        qtys = request.form.getlist("qty[]")
+        prices = request.form.getlist("price[]")
+        items = []
+        for n, qv, pr in zip(names, qtys, prices):
+            if not (n and str(n).strip() and float(qv or 0) > 0):
+                continue
+            qty = float(qv or 0)
+            price = float(pr or 0)
+            items.append({
+                "item_name": str(n).strip(),
+                "quantity": qty,
+                "unit": "pcs",
+                "unit_price": price,
+                "line_total": qty * price,
+            })
+        if not items:
+            flash("Add at least one item with quantity", "error")
+            return redirect(url_for("main.quotation_edit", qid=qid))
+        price_warn = validate_sale_prices(items)
+        db.update_quotation(
+            qid, loc,
             customer_name=request.form.get("customer_name"),
             customer_phone=request.form.get("customer_phone"),
             customer_address=request.form.get("customer_address"),
             discount=request.form.get("discount"),
             notes=request.form.get("notes"),
             date=request.form.get("date"),
-            status=request.form.get("status"))
-        flash("Quotation updated", "success")
+            status=request.form.get("status"),
+            items=items,
+        )
+        if price_warn:
+            flash(f"Quotation updated — WARNING: {price_warn}", "error")
+        else:
+            flash("Quotation updated", "success")
         return redirect(url_for("main.quotation_view", qid=qid))
-    return render_template("entity_edit.html", title="Edit Quotation " + str(q.get("quote_no") or ""),
-        action=url_for("main.quotation_edit", qid=qid),
-        fields=[
-            ("customer_name","Customer",q.get("customer_name"),"text"),
-            ("customer_phone","Phone",q.get("customer_phone"),"text"),
-            ("customer_address","Address",q.get("customer_address"),"text"),
-            ("date","Date",q.get("date"),"date"),
-            ("discount","Discount",q.get("discount"),"number"),
-            ("status","Status",q.get("status"),"text"),
-            ("notes","Notes",q.get("notes"),"text"),
-        ], back=url_for("main.quotation_view", qid=qid), **common_ctx(user))
+    stock = db.get_inventory() or []
+    return render_template(
+        "quotation_edit.html",
+        q=q,
+        stock=stock,
+        **common_ctx(user),
+    )
 
 
 # ---------- PROFIT ----------
